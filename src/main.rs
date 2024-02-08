@@ -1,16 +1,18 @@
 use clap::Parser;
-use std::path;
 
 //
 // Simple tool to combine pacman and AUR package management on Arch Linux 
-// systems. Optionally logs which packages have been downloaded into a JSON file.
-// The file location can be specified with --file (-f) and defaults to 
-// $XDG_CONFIG_HOME/raurman/packagedb.json
+// systems. Optionally logs which packages have been downloaded into a JSON file 
+// for easy system reproducibility
 //
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    // The package to operate on. Corresponds directly to the name of the 
+    // package with pacman or to the name of the repo in the AUR (without .git)
+    pkg: String,
+
     // Sync, the equivalent of "-S" in pacman
     #[arg(short = 'S', long, default_value_t = false)]
     sync: bool,
@@ -26,13 +28,9 @@ struct Args {
     // Whether to save the installed package 
     #[arg(short, long, default_value_t = false)]
     save: bool,
-
-    #[arg(short, long)]
-    file: path::PathBuf,
 }
 
 fn main() {
-    let args = Args::parse();
-
-    println!("args: {:?}", args);
+    let Args { pkg, sync, remove, aur, save } = Args::parse();
+    println!("{}, sync: {}, remove: {}, aur: {}, save: {}", pkg, sync, remove, aur, save);
 }
