@@ -1,5 +1,5 @@
 use std::{env, fs, io, path::Path};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use itertools::Itertools;
 use log::debug;
@@ -7,7 +7,8 @@ use log::debug;
 use crate::error::*;
 use crate::types::*;
 
-const AUR_URL_BASE: &str = "https://aur.archlinux.org/";
+const AUR_URL_BASE: &str = "https://aur.archlinux.org";
+const AUR_TMP_DIR: &str = "/tmp/pkgdir";
 const RAURMAN_DIR: &str = ".config/raurman";
 const PKGDB_FILE: &str = "pkgdb.json";
 
@@ -41,17 +42,79 @@ pub fn list_packages() {
   println!("{db}");
 }
 
-pub fn handle_sync(pkgs: &Vec<Package>) {
-  let pkg_str = pkgs.iter().map(|pkg| &pkg.name).join(" ");
-  let _res = Command::new("pacman").args(["--sync", &pkg_str]);
-  debug!("pacman -S {:?}", pkgs)
+fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
+  let name = &pkg.name;
 
+  // Clone AUR package and cd into it
+  Command::new("git")
+    .args(["clone", 
+      format!("{AUR_URL_BASE}/{name}.git").as_str(), 
+      format!("{AUR_TMP_DIR}").as_str()
+    ])
+    .status()?;
+
+  env::set_current_dir(AUR_TMP_DIR)?;
+
+  // Build and install with makepkg. This has to be run as 
+  // the executing user (instead of root);
+  let res = match env::var("SUDO_USER") {
+    Ok(user) => {
+      Command::new("chown")
+        .args(["-R", &user, AUR_TMP_DIR])
+        .status()?;
+
+      Command::new("su")
+        .args(["-c", "makepkg -si", &user])
+        .status().map(|_| {})
+    },
+    Err(_) => {
+      Command::new("makepkg")
+        .arg("-si")
+        .status().map(|_| {})
+    }
+  }; 
+
+  // Remove temp dir and contents
+  fs::remove_dir_all(AUR_TMP_DIR)?;
+
+  Ok(res?)
+}
+
+fn install_pacman_pkgs(pkgs: Vec<&Package>) -> Result<(), AppError> {
+  let pkgs_str = pkgs.iter().map(|pkg| &pkg.name).join(" ");
+  debug!("Calling command: pacman -S {:?}", pkgs_str);
+
+  Command::new("pacman")
+    .args(["--sync", &pkgs_str])
+    .stdout(Stdio::inherit())
+    .status()?;
+
+  Ok(())
+}
+
+pub fn handle_sync(pkgs: &Vec<Package>) -> Result<(), AppError> {
+  for (aur, pkgs) in &pkgs.into_iter().group_by(|pkg| pkg.aur.is_some()) {
+    // AUR packages
+    if aur {
+      for pkg in pkgs.into_iter() {
+        install_aur_pkg(pkg)?;
+      }
+    }
+    // Pacman packages
+    else {
+      install_pacman_pkgs(pkgs.collect())?;
+    }
+  }
+
+  Ok(())
 }
 
 
-pub fn handle_remove(pkgs: &Vec<Package>) {
+pub fn handle_remove(pkgs: &Vec<Package>) -> Result<(), AppError> {
   // let pkg_str = pkgs.iter().map(|pkg| pkg.name).join(" ");
-  debug!("pacman -R {:?}", pkgs)
+  debug!("pacman -R {:?}", pkgs);
+
+  Ok(())
 }
 
 pub fn handle_save(pkgs: &Vec<Package>, op: &OpType, groups: &Vec<String>) -> Result<(), AppError> {

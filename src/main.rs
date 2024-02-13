@@ -1,4 +1,5 @@
 use clap::Parser;
+use error::AppError;
 use nix::unistd::Uid;
 use log::error;
 
@@ -16,7 +17,7 @@ use logger::LoggerFlags;
 // systems. Optionally logs which packages have been downloaded into a JSON file 
 // for easy system reproducibility
 //
-fn main() {
+fn main() -> Result<(), AppError> {
   use OpType::*;
   let Cli { pkgs, op, aur, db, verbose, debug } = Cli::parse();
 
@@ -29,22 +30,28 @@ fn main() {
   // Return early if only listing
   if op == List {
     list_packages();
-    return;
+    return Ok(());
   }
 
+  let has_correct_rights = 
+    !Uid::effective().is_root() && 
+    !debug && 
+    !db.db_only &&
+    !aur;
+
   // Check for sudo rights
-  if !Uid::effective().is_root() && !debug && !db.db_only {
+  if has_correct_rights {
     panic!("raurman: You cannot perform this operation unless you are root.")
   }
 
   if !db.db_only {
     if op == Sync  {
-      handle_sync(&pkg_objs);
+      handle_sync(&pkg_objs)?;
     } 
 
     // pacman can be used to remove AUR packages as well
     if op == Remove {
-      handle_remove(&pkg_objs);
+      handle_remove(&pkg_objs)?;
     }
   }
 
@@ -64,4 +71,6 @@ fn main() {
       error!("raurman {op_flag} {pkg_str} --db-only");
     };
   }
+  
+  Ok(())
 }
