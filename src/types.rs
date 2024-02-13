@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{fmt, cmp::Ordering};
+use std::{fmt, cmp::Ordering, rc::Rc};
 
 use clap::{Parser, Args};
 use serde::{Serialize, Deserialize, Serializer, ser::SerializeStruct};
@@ -81,12 +81,14 @@ impl From<Operation> for OpType {
   }
 }
 
+type RcStr = Rc<str>;
+
 //
 // Object representation of a single package in pkgdb.json
 //
 #[derive(Deserialize, Debug, Clone, Eq)]
 pub struct Package { 
-  pub name: String,
+  pub name: RcStr,
   pub aur: Option<bool> 
 }
 
@@ -97,8 +99,8 @@ impl PartialEq for Package {
 }
 
 impl Package {
-  pub fn new(name: &String, aur: bool) -> Package {
-    Package { name: name.to_string(), aur: if aur { Some(true) } else { None } }
+  pub fn new(name: &str, aur: bool) -> Package {
+    Package { name: name.into(), aur: if aur { Some(true) } else { None } }
   }
 }
 
@@ -140,20 +142,20 @@ impl Serialize for Package {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PackageDb {
   #[serde(flatten)]
-  pub json: HashMap<String, Vec<Package>>
+  pub json: HashMap<RcStr, Vec<Package>>
 }
 
 impl PackageDb {
   // Initialize empty PackageDb
   pub fn empty() -> PackageDb {
-    PackageDb { json: HashMap::from([("default".to_string(), Vec::<Package>::new())]) }
+    PackageDb { json: HashMap::from([("default".into(), Vec::<Package>::new())]) }
     
   }
   
   // Add package(s) to pkgdb, if no group is defined, apply to all groups
   pub fn add(&mut self, pkgs: &Vec<Package>, groups: &Vec<String>) -> &PackageDb {
     for (g, list) in self.json.iter_mut() {
-      if groups.is_empty() || groups.contains(&g) {
+      if groups.is_empty() || groups.contains(&g.to_string()) {
         for pkg in pkgs.into_iter() { 
           list.push(pkg.clone())
         }
@@ -168,7 +170,7 @@ impl PackageDb {
   // Remove package(s) from pkgdb, if no group is defined, apply to all groups
   pub fn remove(&mut self, pkgs: &Vec<Package>, groups: &Vec<String>) -> &PackageDb {
     for (g, list) in self.json.clone().into_iter() {
-      if groups.is_empty() || groups.contains(&g) {
+      if groups.is_empty() || groups.contains(&g.to_string()) {
         let filtered = list.into_iter()
           .filter(|pkg| pkgs.contains(pkg))
           .collect();

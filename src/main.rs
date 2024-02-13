@@ -24,7 +24,7 @@ fn main() {
 
   let _ = logger::init(LoggerFlags { verbose, debug });
 
-  let pkg_objs = pkgs.iter().map(|pkg| { Package::new(pkg, aur)}).collect();
+  let pkg_objs = pkgs.iter().map(|pkg| { Package::new(pkg.as_str(), aur)}).collect();
 
   // Return early if only listing
   if op == List {

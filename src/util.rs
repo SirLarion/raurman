@@ -1,5 +1,7 @@
 use std::{env, fs, io, path::Path};
+use std::process::Command;
 
+use itertools::Itertools;
 use log::debug;
 
 use crate::error::*;
@@ -40,8 +42,8 @@ pub fn list_packages() {
 }
 
 pub fn handle_sync(pkgs: &Vec<Package>) {
-  // let pkg_str = pkgs.iter().map(|pkg| pkg.name).join(" ");
-  // let res = Command::new("pacman").args(["--sync", &pkg_str]);
+  let pkg_str = pkgs.iter().map(|pkg| &pkg.name).join(" ");
+  let _res = Command::new("pacman").args(["--sync", &pkg_str]);
   debug!("pacman -S {:?}", pkgs)
 
 }
