@@ -46,6 +46,7 @@ fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
   let name = &pkg.name;
 
   // Clone AUR package and cd into it
+  debug!("git clone {AUR_URL_BASE}/{name}.git {AUR_TMP_DIR}");
   Command::new("git")
     .args(["clone", 
       format!("{AUR_URL_BASE}/{name}.git").as_str(), 
@@ -53,21 +54,25 @@ fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
     ])
     .status()?;
 
+  debug!("cd {AUR_TMP_DIR}");
   env::set_current_dir(AUR_TMP_DIR)?;
 
   // Build and install with makepkg. This has to be run as 
   // the executing user (instead of root);
   let res = match env::var("SUDO_USER") {
     Ok(user) => {
+      debug!("chown -R {user} {AUR_TMP_DIR}");
       Command::new("chown")
         .args(["-R", &user, AUR_TMP_DIR])
         .status()?;
 
+      debug!("su -c 'makepkg -si' {user}");
       Command::new("su")
         .args(["-c", "makepkg -si", &user])
         .status().map(|_| {})
     },
     Err(_) => {
+      debug!("makepkg -si");
       Command::new("makepkg")
         .arg("-si")
         .status().map(|_| {})
@@ -82,8 +87,8 @@ fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
 
 fn install_pacman_pkgs(pkgs: Vec<&Package>) -> Result<(), AppError> {
   let pkgs_str = pkgs.iter().map(|pkg| &pkg.name).join(" ");
-  debug!("Calling command: pacman -S {:?}", pkgs_str);
 
+  debug!("pacman -S {:?}", pkgs_str);
   Command::new("pacman")
     .args(["--sync", &pkgs_str])
     .stdout(Stdio::inherit())
@@ -111,8 +116,12 @@ pub fn handle_sync(pkgs: &Vec<Package>) -> Result<(), AppError> {
 
 
 pub fn handle_remove(pkgs: &Vec<Package>) -> Result<(), AppError> {
-  // let pkg_str = pkgs.iter().map(|pkg| pkg.name).join(" ");
+  let pkgs_str = pkgs.iter().map(|pkg| &pkg.name).join(" ");
   debug!("pacman -R {:?}", pkgs);
+  Command::new("pacman")
+    .args(["--remove", &pkgs_str])
+    .stdout(Stdio::inherit())
+    .status()?;
 
   Ok(())
 }

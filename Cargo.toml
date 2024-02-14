@@ -1,8 +1,10 @@
 [package]
 name = "raurman"
-author = "Miska Tammenpää"
-version = "0.1.0"
+authors = ["Miska Tammenpää <miska@tammenpaa.com>"]
+version = "1.0.0"
 edition = "2021"
+license = "GPLv3"
+description = "Package management tool for Arch Linux combining pacman and AUR installations"
 publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
