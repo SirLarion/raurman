@@ -1,4 +1,5 @@
-use std::{env, fs, io, path::Path};
+use std::path::{Path, PathBuf};
+use std::{env, fs, io};
 use std::process::{Command, Stdio};
 
 use itertools::Itertools;
@@ -33,6 +34,18 @@ fn read_pkgdb() -> Result<PackageDb, AppError> {
   let json = serde_json::from_str::<PackageDb>(&raw_str[..])?;
 
   Ok(json)
+}
+
+pub fn backup_pkgdb(to: &String) -> Result<(), AppError> {
+  let from = get_pkgdb_path()?;
+  let mut to = PathBuf::from(to);
+
+  if to.is_dir() {
+    to = to.join(PKGDB_FILE);
+  }
+  fs::copy(from, to)?; 
+
+  Ok(())
 }
 
 pub fn list_packages() {

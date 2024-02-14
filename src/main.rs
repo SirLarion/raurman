@@ -27,10 +27,13 @@ fn main() -> Result<(), AppError> {
 
   let pkg_objs = pkgs.iter().map(|pkg| { Package::new(pkg.as_str(), aur)}).collect();
 
-  // Return early if only listing
+  // Return early if listing or creating backup
   if op == List {
     list_packages();
     return Ok(());
+  }
+  if let Backup(to) = op {
+    return backup_pkgdb(&to);
   }
 
   let has_correct_rights = 

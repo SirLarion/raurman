@@ -45,6 +45,10 @@ pub struct Operation {
   /// Print out the packages that have been installed via raurman
   #[arg(short = 'L', long, default_value_t = false)]
   pub list: bool,
+
+  /// Create a backup of the pkgdb.json in the specified location
+  #[arg(long = "backup")]
+  pub backup: Option<String>,
 }
 
 #[derive(Args)]
@@ -68,14 +72,16 @@ pub enum OpType {
   Sync,
   Remove,
   List,
+  Backup(String),
 }
 
 impl From<Operation> for OpType {
   fn from(op: Operation) -> OpType {
     match op {
-      Operation { sync: true, .. }   => OpType::Sync,
-      Operation { remove: true, .. } => OpType::Remove,
-      Operation { list: true, .. }   => OpType::List,
+      Operation { sync: true, .. }       => OpType::Sync,
+      Operation { remove: true, .. }     => OpType::Remove,
+      Operation { list: true, .. }       => OpType::List,
+      Operation { backup: Some(to), .. } => OpType::Backup(to),
       _ => panic!("Something has gone terribly wrong 👾")
     }
   }
