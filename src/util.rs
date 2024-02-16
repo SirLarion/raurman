@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::{env, fs, io};
+use std::{env, fs, io, rc::Rc, collections::HashMap};
 use std::process::{Command, Stdio};
 
 use itertools::Itertools;
@@ -48,11 +48,21 @@ pub fn backup_pkgdb(to: &String) -> Result<(), AppError> {
   Ok(())
 }
 
-pub fn list_packages() {
+pub fn list_packages(groups: Vec<Rc<str>>) {
   let db = read_pkgdb().unwrap_or_else(|err| {
     panic!("raurman: Reading {PKGDB_FILE} failed: {err}")
   });
-  println!("{db}");
+
+  if !groups.is_empty() {
+    for g in groups {
+      if let Some(list) = db.json.get(&g) {
+        let print_group = PackageDb { json: HashMap::from([(g, list.clone())]) };
+        println!("{print_group}");
+      }
+    }
+  } else {
+    println!("{db}");
+  }
 }
 
 fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
@@ -111,7 +121,7 @@ fn install_pacman_pkgs(pkgs: Vec<&Package>) -> Result<(), AppError> {
 }
 
 pub fn use_db_pkgs_if_empty
-  (pkgs: Vec<Package>, groups: &Vec<String>) -> Result<(Vec<Package>, bool), AppError> {
+  (pkgs: Vec<Package>, groups: &Vec<Rc<str>>) -> Result<(Vec<Package>, bool), AppError> {
   if !pkgs.is_empty() {
     return Ok((pkgs, false));
   }
@@ -120,7 +130,7 @@ pub fn use_db_pkgs_if_empty
   let mut pkgs: Vec<Package> = Vec::new();
 
   for (g, mut list) in pkgdb.json.into_iter() {
-    if groups.is_empty() || groups.contains(&g.to_string()) {
+    if groups.is_empty() || groups.contains(&g) {
       pkgs.append(&mut list);
     }
   }
@@ -157,7 +167,7 @@ pub fn handle_remove(pkgs: &Vec<Package>) -> Result<(), AppError> {
   Ok(())
 }
 
-pub fn handle_save(pkgs: &Vec<Package>, op: &OpType, groups: &Vec<String>) -> Result<(), AppError> {
+pub fn handle_save(pkgs: Vec<Package>, op: &OpType, groups: Vec<Rc<str>>) -> Result<(), AppError> {
   let mut pkgdb = match read_pkgdb() {
     Ok(db) => db,
     Err(AppError::IoError(e)) if e.kind() == io::ErrorKind::NotFound => {
@@ -169,7 +179,7 @@ pub fn handle_save(pkgs: &Vec<Package>, op: &OpType, groups: &Vec<String>) -> Re
   if op == &OpType::Sync { 
     pkgdb.add(pkgs, groups);
   }
-  if op == &OpType::Remove { 
+  else if op == &OpType::Remove { 
     pkgdb.remove(pkgs, groups);
   }
 

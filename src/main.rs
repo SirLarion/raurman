@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{io::Read, rc::Rc};
 
 use clap::Parser;
 use error::AppError;
@@ -22,33 +22,37 @@ use logger::LoggerFlags;
 fn main() -> Result<(), AppError> {
   use OpType::*;
   let Cli { pkgs, op, aur, db, verbose, debug } = Cli::parse();
-
-  let op: OpType = op.into();
-
   let _ = logger::init(LoggerFlags { verbose, debug });
 
+  // Preprocess input
+  let op: OpType = op.into();
+  let groups: Vec<Rc<str>> = db.group.into_iter().map(|g| g.into()).collect();
+
+  let mut pkgs = pkgs;
+  pkgs.sort();
+  pkgs.dedup();
   let pkg_objs = pkgs.iter().map(|pkg| { Package::new(pkg.as_str(), aur)}).collect();
 
   // Return early if listing or creating backup
   if op == List {
-    list_packages();
+    list_packages(groups);
     return Ok(());
   }
   if let Backup(to) = op {
     return backup_pkgdb(&to);
   }
 
+  // Check for sudo rights where necessary
   let has_correct_rights = 
     !Uid::effective().is_root() && 
     !debug && 
     !db.db_only;
 
-  // Check for sudo rights
   if has_correct_rights {
     panic!("raurman: You cannot perform this operation unless you are root.")
   }
 
-  let (pkg_objs, is_target_from_db) = use_db_pkgs_if_empty(pkg_objs, &db.group)?;
+  let (pkg_objs, is_target_from_db) = use_db_pkgs_if_empty(pkg_objs, &groups)?;
 
   if !db.db_only {
     let handler: fn(&Vec<Package>) -> Result<(), AppError>;
@@ -81,7 +85,7 @@ fn main() -> Result<(), AppError> {
   }
 
   if db.save {
-    if let Err(e) = handle_save(&pkg_objs, &op, &db.group) {
+    if let Err(e) = handle_save(pkg_objs, &op, groups) {
       error!("Error saving pkgdb.json: {e}");
       error!("Please resolve your pkgdb issue and rerun this command with --db-only: ");
 

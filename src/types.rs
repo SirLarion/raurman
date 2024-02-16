@@ -59,7 +59,7 @@ pub struct DbOpts {
   pub save: bool,
 
   /// Which groups to save the package under
-  #[arg(short = 'G', long, help_heading = "Database options", requires = "save", default_values_t = Vec::<String>::new())]
+  #[arg(short = 'G', long, help_heading = "Database options", default_values_t = Vec::<String>::new())]
   pub group: Vec<String>,
 
   /// Only perform the selected operation on the database
@@ -155,33 +155,50 @@ impl PackageDb {
   // Initialize empty PackageDb
   pub fn empty() -> PackageDb {
     PackageDb { json: HashMap::from([("default".into(), Vec::<Package>::new())]) }
-    
   }
   
   // Add package(s) to pkgdb, if no group is defined, apply to all groups
-  pub fn add(&mut self, pkgs: &Vec<Package>, groups: &Vec<String>) -> &PackageDb {
-    for (g, list) in self.json.iter_mut() {
-      if groups.is_empty() || groups.contains(&g.to_string()) {
-        for pkg in pkgs.into_iter() { 
-          list.push(pkg.clone())
+  pub fn add(&mut self, pkgs: Vec<Package>, groups: Vec<Rc<str>>) -> &PackageDb {
+    let mut new_groups: Vec<(Rc<str>, Vec<Package>)> = Vec::new();
+
+    if !groups.is_empty() {
+      for g in groups {
+        match self.json.get_mut(&g) {
+          Some(list) => {
+            list.append(&mut pkgs.clone()); 
+            list.sort(); 
+            list.dedup(); 
+          },
+          None => new_groups.push((g, pkgs.clone()))
         }
       }
-      list.sort();
-      list.dedup();
+      for (g, list) in new_groups {
+        self.json.insert(g, list);
+      }
+    } else {
+      for (_, list) in self.json.iter_mut() {
+        list.append(&mut pkgs.clone()); 
+        list.sort(); 
+        list.dedup();        
+      }
     }
 
     self
   } 
 
   // Remove package(s) from pkgdb, if no group is defined, apply to all groups
-  pub fn remove(&mut self, pkgs: &Vec<Package>, groups: &Vec<String>) -> &PackageDb {
+  pub fn remove(&mut self, pkgs: Vec<Package>, groups: Vec<Rc<str>>) -> &PackageDb {
     for (g, list) in self.json.clone().into_iter() {
-      if groups.is_empty() || groups.contains(&g.to_string()) {
-        let filtered = list.into_iter()
-          .filter(|pkg| pkgs.contains(pkg))
+      if groups.is_empty() || groups.contains(&g) {
+        let filtered: Vec<Package> = list.into_iter()
+          .filter(|pkg| !pkgs.contains(pkg))
           .collect();
-
-        self.json.insert(g, filtered);
+        
+        if filtered.is_empty() {
+          self.json.remove(&g);
+        } else {
+          self.json.insert(g, filtered);
+        }
       }
     }
 
