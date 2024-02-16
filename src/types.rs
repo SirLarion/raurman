@@ -58,9 +58,12 @@ pub struct DbOpts {
   #[arg(short, long, help_heading = "Database options", default_value_t = false)]
   pub save: bool,
 
-  /// Which groups to save the package under
-  #[arg(short = 'G', long, help_heading = "Database options", default_values_t = Vec::<String>::new())]
-  pub group: Vec<String>,
+  /// Which groups to save the package under, comma separated list
+  #[arg(
+    short = 'G', long, help_heading = "Database options", 
+    value_delimiter = ',', default_values_t = Vec::<String>::new()
+  )]
+  pub groups: Vec<String>,
 
   /// Only perform the selected operation on the database
   #[arg(long = "db-only", help_heading = "Database options", requires = "save", default_value_t = false)]
@@ -87,14 +90,12 @@ impl From<Operation> for OpType {
   }
 }
 
-type RcStr = Rc<str>;
-
 //
 // Object representation of a single package in pkgdb.json
 //
 #[derive(Deserialize, Debug, Clone, Eq)]
 pub struct Package { 
-  pub name: RcStr,
+  pub name: Rc<str>,
   pub aur: Option<bool> 
 }
 
@@ -148,7 +149,7 @@ impl Serialize for Package {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PackageDb {
   #[serde(flatten)]
-  pub json: HashMap<RcStr, Vec<Package>>
+  pub json: HashMap<Rc<str>, Vec<Package>>
 }
 
 impl PackageDb {

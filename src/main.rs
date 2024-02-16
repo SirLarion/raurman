@@ -26,7 +26,7 @@ fn main() -> Result<(), AppError> {
 
   // Preprocess input
   let op: OpType = op.into();
-  let groups: Vec<Rc<str>> = db.group.into_iter().map(|g| g.into()).collect();
+  let groups: Vec<Rc<str>> = db.groups.into_iter().map(|g| g.into()).collect();
 
   let mut pkgs = pkgs;
   pkgs.sort();
