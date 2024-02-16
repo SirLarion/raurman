@@ -87,25 +87,30 @@ fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
       debug!("chown -R {user} {AUR_TMP_DIR}");
       Command::new("chown")
         .args(["-R", &user, AUR_TMP_DIR])
-        .status()?;
+        .output()?;
 
       debug!("su -c 'makepkg -si' {user}");
       Command::new("su")
         .args(["-c", "makepkg -si", &user])
-        .status().map(|_| {})
+        .status()
     },
     Err(_) => {
       debug!("makepkg -si");
       Command::new("makepkg")
         .arg("-si")
-        .status().map(|_| {})
+        .status()
     }
   }; 
 
   // Remove temp dir and contents
   fs::remove_dir_all(AUR_TMP_DIR)?;
+  let exit_status = res?;
 
-  Ok(res?)
+  if exit_status.success() {
+    Ok(())
+  } else {
+    Err(AppError::CmdError(exit_status))
+  }
 }
 
 fn install_pacman_pkgs(pkgs: Vec<&Package>) -> Result<(), AppError> {

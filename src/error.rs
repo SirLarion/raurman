@@ -1,4 +1,4 @@
-use std::{io, env};
+use std::{io, env, process::ExitStatus};
 
 use thiserror::Error;
 use serde_json::Error as SerdeError;
@@ -13,4 +13,7 @@ pub enum AppError {
 
   #[error(transparent)]
   EnvError(#[from] env::VarError),
+
+  #[error("executing command failed")]
+  CmdError(ExitStatus)
 }

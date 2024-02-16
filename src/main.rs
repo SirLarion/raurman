@@ -53,6 +53,7 @@ fn main() -> Result<(), AppError> {
   }
 
   let (pkg_objs, is_target_from_db) = use_db_pkgs_if_empty(pkg_objs, &groups)?;
+  let mut pkg_handler_res: Result<(), AppError> = Ok(());
 
   if !db.db_only {
     let handler: fn(&Vec<Package>) -> Result<(), AppError>;
@@ -81,10 +82,10 @@ fn main() -> Result<(), AppError> {
         return Ok(());
       }
     }
-    handler(&pkg_objs)?;
+    pkg_handler_res = handler(&pkg_objs);
   }
 
-  if db.save {
+  if db.save && pkg_handler_res.is_ok() {
     if let Err(e) = handle_save(pkg_objs, &op, groups) {
       error!("Error saving pkgdb.json: {e}");
       error!("Please resolve your pkgdb issue and rerun this command with --db-only: ");
@@ -101,5 +102,5 @@ fn main() -> Result<(), AppError> {
     };
   }
   
-  Ok(())
+  Ok(pkg_handler_res?)
 }
