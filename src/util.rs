@@ -80,27 +80,11 @@ fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
   debug!("cd {AUR_TMP_DIR}");
   env::set_current_dir(AUR_TMP_DIR)?;
 
-  // Build and install with makepkg. This has to be run as 
-  // the executing user (instead of root);
-  let res = match env::var("SUDO_USER") {
-    Ok(user) => {
-      debug!("chown -R {user} {AUR_TMP_DIR}");
-      Command::new("chown")
-        .args(["-R", &user, AUR_TMP_DIR])
-        .output()?;
+  let res = Command::new("makepkg")
+    .arg("-si")
+    .stdout(Stdio::inherit())
+    .status();
 
-      debug!("su -c 'makepkg -si' {user}");
-      Command::new("su")
-        .args(["-c", "makepkg -si", &user])
-        .status()
-    },
-    Err(_) => {
-      debug!("makepkg -si");
-      Command::new("makepkg")
-        .arg("-si")
-        .status()
-    }
-  }; 
 
   // Remove temp dir and contents
   fs::remove_dir_all(AUR_TMP_DIR)?;

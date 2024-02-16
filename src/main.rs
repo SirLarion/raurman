@@ -42,15 +42,21 @@ fn main() -> Result<(), AppError> {
     return backup_pkgdb(&to);
   }
 
-  // Check for sudo rights where necessary
-  let has_correct_rights = 
-    !Uid::effective().is_root() && 
-    !debug && 
-    !db.db_only;
+  let has_sudo_rights = Uid::effective().is_root();
 
-  if has_correct_rights {
-    panic!("raurman: You cannot perform this operation unless you are root.")
-  }
+  if !debug && !db.db_only {
+    match (aur, has_sudo_rights) {
+      (true, true) => return Err(
+        AppError::AclError(
+          "Running makepkg as root is not allowed as it can cause permanent, catastrophic damage to your system.".into()
+      )),
+      (false, false) => return Err(
+        AppError::AclError(
+          "You cannot perform this operation unless you are root.".into()
+      )),
+      _ => {}
+    }
+  } 
 
   let (pkg_objs, is_target_from_db) = use_db_pkgs_if_empty(pkg_objs, &groups)?;
   let mut pkg_handler_res: Result<(), AppError> = Ok(());

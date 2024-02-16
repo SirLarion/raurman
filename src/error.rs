@@ -14,6 +14,9 @@ pub enum AppError {
   #[error(transparent)]
   EnvError(#[from] env::VarError),
 
+  #[error("incorrect rights for the requested operation")]
+  AclError(String),
+
   #[error("executing command failed")]
   CmdError(ExitStatus)
 }
