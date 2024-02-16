@@ -110,6 +110,24 @@ fn install_pacman_pkgs(pkgs: Vec<&Package>) -> Result<(), AppError> {
   Ok(())
 }
 
+pub fn use_db_pkgs_if_empty
+  (pkgs: Vec<Package>, groups: &Vec<String>) -> Result<(Vec<Package>, bool), AppError> {
+  if !pkgs.is_empty() {
+    return Ok((pkgs, false));
+  }
+
+  let pkgdb = read_pkgdb()?;
+  let mut pkgs: Vec<Package> = Vec::new();
+
+  for (g, mut list) in pkgdb.json.into_iter() {
+    if groups.is_empty() || groups.contains(&g.to_string()) {
+      pkgs.append(&mut list);
+    }
+  }
+
+  Ok((pkgs, true))
+}
+
 pub fn handle_sync(pkgs: &Vec<Package>) -> Result<(), AppError> {
   for (aur, pkgs) in &pkgs.into_iter().group_by(|pkg| pkg.aur.is_some()) {
     // AUR packages

@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use clap::Parser;
 use error::AppError;
 use nix::unistd::Uid;
@@ -39,23 +41,43 @@ fn main() -> Result<(), AppError> {
   let has_correct_rights = 
     !Uid::effective().is_root() && 
     !debug && 
-    !db.db_only &&
-    !aur;
+    !db.db_only;
 
   // Check for sudo rights
   if has_correct_rights {
     panic!("raurman: You cannot perform this operation unless you are root.")
   }
 
-  if !db.db_only {
-    if op == Sync  {
-      handle_sync(&pkg_objs)?;
-    } 
+  let (pkg_objs, is_target_from_db) = use_db_pkgs_if_empty(pkg_objs, &db.group)?;
 
+  if !db.db_only {
+    let handler: fn(&Vec<Package>) -> Result<(), AppError>;
+    let op_string: &str;
+
+    if op == Sync  {
+      handler = handle_sync;
+      op_string = "install";
+    } 
     // pacman can be used to remove AUR packages as well
-    if op == Remove {
-      handle_remove(&pkg_objs)?;
+    else {
+      handler = handle_remove;
+      op_string = "remove";
     }
+
+    if is_target_from_db {
+      println!("This will {op_string} many packages. Do you want to continue? [y/N]");
+
+      let input: Option<char> = std::io::stdin()
+        .bytes() 
+        .next()
+        .and_then(|result| result.ok())
+        .map(|byte| byte as char);
+
+      if input != Some('y') && input != Some('Y') {
+        return Ok(());
+      }
+    }
+    handler(&pkg_objs)?;
   }
 
   if db.save {
