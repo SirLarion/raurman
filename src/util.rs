@@ -98,11 +98,15 @@ fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
 }
 
 fn install_pacman_pkgs(pkgs: Vec<&Package>) -> Result<(), AppError> {
-  let pkgs_str = pkgs.iter().map(|pkg| &pkg.name).join(" ");
+  let str_pkgs: Vec<String> = pkgs
+    .iter()
+    .map(|pkg| format!("{}", &pkg.name))
+    .collect();
 
-  debug!("pacman -S {:?}", pkgs_str);
+  debug!("pacman -S {}", str_pkgs.join(" "));
   Command::new("pacman")
-    .args(["--sync", &pkgs_str])
+    .arg("--sync")
+    .args(str_pkgs)
     .stdout(Stdio::inherit())
     .status()?;
 

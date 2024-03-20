@@ -45,12 +45,12 @@ fn main() -> Result<(), AppError> {
   let has_sudo_rights = Uid::effective().is_root();
 
   if !debug && !db.db_only {
-    match (aur, has_sudo_rights) {
-      (true, true) => return Err(
+    match (aur, has_sudo_rights, &op) {
+      (true, true, Sync) => return Err(
         AppError::AclError(
           "Running makepkg as root is not allowed as it can cause permanent, catastrophic damage to your system.".into()
       )),
-      (false, false) => return Err(
+      (false, false, _) => return Err(
         AppError::AclError(
           "You cannot perform this operation unless you are root.".into()
       )),
