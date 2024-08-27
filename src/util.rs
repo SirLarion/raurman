@@ -68,6 +68,9 @@ pub fn list_packages(groups: Vec<Rc<str>>) {
 fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
   let name = &pkg.name;
 
+  // Remove possible previous temp dir and contents
+  if let Err(_) = fs::remove_dir_all(AUR_TMP_DIR) {};
+
   // Clone AUR package and cd into it
   debug!("git clone {AUR_URL_BASE}/{name}.git {AUR_TMP_DIR}");
   Command::new("git")
@@ -85,9 +88,6 @@ fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
     .stdout(Stdio::inherit())
     .status();
 
-
-  // Remove temp dir and contents
-  fs::remove_dir_all(AUR_TMP_DIR)?;
   let exit_status = res?;
 
   if exit_status.success() {
