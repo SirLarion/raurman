@@ -48,9 +48,8 @@ pub fn backup_pkgdb(to: &String) -> Result<(), AppError> {
     Ok(())
 }
 
-pub fn list_packages(groups: Vec<Rc<str>>) {
-    let db =
-        read_pkgdb().unwrap_or_else(|err| panic!("raurman: Reading {PKGDB_FILE} failed: {err}"));
+pub fn list_packages(groups: Vec<Rc<str>>) -> Result<(), AppError> {
+    let db = read_pkgdb()?;
 
     if !groups.is_empty() {
         for g in groups {
@@ -64,6 +63,8 @@ pub fn list_packages(groups: Vec<Rc<str>>) {
     } else {
         println!("{db}");
     }
+
+    Ok(())
 }
 
 fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
@@ -100,26 +101,19 @@ fn install_aur_pkg(pkg: &Package) -> Result<(), AppError> {
 }
 
 fn install_pacman_pkgs(pkgs: Vec<&Package>) -> Result<(), AppError> {
-    let str_pkgs: Vec<String> = pkgs.iter().map(|pkg| format!("{}", &pkg.name)).collect();
+    let pkgs_str: Vec<String> = pkgs.iter().map(|pkg| format!("{}", &pkg.name)).collect();
 
-    debug!("pacman -S {}", str_pkgs.join(" "));
+    debug!("pacman -S {}", pkgs_str.join(" "));
     Command::new("pacman")
         .arg("--sync")
-        .args(str_pkgs)
+        .args(pkgs_str)
         .stdout(Stdio::inherit())
         .status()?;
 
     Ok(())
 }
 
-pub fn use_db_pkgs_if_empty(
-    pkgs: Vec<Package>,
-    groups: &Vec<Rc<str>>,
-) -> Result<(Vec<Package>, bool), AppError> {
-    if !pkgs.is_empty() {
-        return Ok((pkgs, false));
-    }
-
+pub fn use_db_pkgs(groups: &Vec<Rc<str>>) -> Result<Vec<Package>, AppError> {
     let pkgdb = read_pkgdb()?;
     let mut pkgs: Vec<Package> = Vec::new();
 
@@ -129,7 +123,7 @@ pub fn use_db_pkgs_if_empty(
         }
     }
 
-    Ok((pkgs, true))
+    Ok(pkgs)
 }
 
 pub fn handle_sync(pkgs: &Vec<Package>) -> Result<(), AppError> {
@@ -143,6 +137,33 @@ pub fn handle_sync(pkgs: &Vec<Package>) -> Result<(), AppError> {
         // Pacman packages
         else {
             install_pacman_pkgs(pkgs.collect())?;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn handle_search(pkgs: &Vec<Package>) -> Result<(), AppError> {
+    for (aur, pkgs) in &pkgs.into_iter().group_by(|pkg| pkg.aur.is_some()) {
+        let pkgs_str = pkgs.into_iter().map(|pkg| &pkg.name).join(" ");
+        if aur {
+            if let Ok(_) = Command::new("which")
+                .args(["yay"])
+                .stdout(Stdio::null())
+                .status()
+            {
+                Command::new("yay")
+                    .args(["--sync", "--search", &pkgs_str])
+                    .status()?;
+            } else {
+                Err(AppError::LazyDevError(
+                    "AUR search depends on having yay installed".to_string(),
+                ))?
+            }
+        } else {
+            Command::new("pacman")
+                .args(["--sync", "--search", &pkgs_str])
+                .status()?;
         }
     }
 

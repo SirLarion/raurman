@@ -32,11 +32,15 @@ pub struct Cli {
 }
 
 #[derive(Args)]
-#[group(required = true, multiple = false)]
+#[group(required = true)]
 pub struct Operation {
     /// The equivalent of "-S" in pacman
     #[arg(short = 'S', long, default_value_t = false)]
     pub sync: bool,
+
+    /// The equivalent of "-s" in pacman
+    #[arg(short = 's', long, default_value_t = false)]
+    pub search: bool,
 
     /// The equivalent of "-R" in pacman
     #[arg(short = 'R', long, default_value_t = false)]
@@ -47,34 +51,27 @@ pub struct Operation {
     pub list: bool,
 
     /// Create a backup of the pkgdb.json in the specified location
-    #[arg(long = "backup")]
+    #[arg(long)]
     pub backup: Option<String>,
 }
 
 #[derive(Args)]
 #[group()]
 pub struct DbOpts {
-    /// Whether to save the effect of the operation in pkgdb.json  
-    #[arg(
-        short,
-        long,
-        help_heading = "Database options",
-        default_value_t = false
-    )]
-    pub save: bool,
-
     /// Which groups to save the package under, comma separated list
     #[arg(
-    short = 'G', long, help_heading = "Database options", 
-    value_delimiter = ',', default_values_t = Vec::<String>::new()
-  )]
-    pub groups: Vec<String>,
+        short = 'G',
+        long,
+        help_heading = "Database options",
+        value_delimiter = ','
+    )]
+    pub groups: Option<Vec<String>>,
 
     /// Only perform the selected operation on the database
     #[arg(
         long = "db-only",
         help_heading = "Database options",
-        requires = "save",
+        requires = "groups",
         default_value_t = false
     )]
     pub db_only: bool,
@@ -83,6 +80,7 @@ pub struct DbOpts {
 #[derive(PartialEq)]
 pub enum OpType {
     Sync,
+    Search,
     Remove,
     List,
     Backup(String),
@@ -91,7 +89,16 @@ pub enum OpType {
 impl From<Operation> for OpType {
     fn from(op: Operation) -> OpType {
         match op {
-            Operation { sync: true, .. } => OpType::Sync,
+            Operation {
+                sync: true,
+                search: false,
+                ..
+            } => OpType::Sync,
+            Operation {
+                sync: true,
+                search: true,
+                ..
+            } => OpType::Search,
             Operation { remove: true, .. } => OpType::Remove,
             Operation { list: true, .. } => OpType::List,
             Operation {

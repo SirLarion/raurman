@@ -17,6 +17,12 @@ pub enum AppError {
     #[error("incorrect rights for the requested operation")]
     AclError(String),
 
+    #[error("incorrect parameters")]
+    ParamError(String),
+
     #[error("executing command failed")]
     CmdError(ExitStatus),
+
+    #[error("not implemented")]
+    LazyDevError(String),
 }

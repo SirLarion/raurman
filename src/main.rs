@@ -33,42 +33,60 @@ fn main() -> Result<(), AppError> {
 
     // Preprocess input
     let op: OpType = op.into();
-    let groups: Vec<Rc<str>> = db.groups.into_iter().map(|g| g.into()).collect();
+
+    let target_db = db.groups.is_some();
+    let groups: Vec<Rc<str>> = if target_db {
+        db.groups.unwrap().into_iter().map(|g| g.into()).collect()
+    } else {
+        vec![]
+    };
 
     let mut pkgs = pkgs;
     pkgs.sort();
     pkgs.dedup();
-    let pkg_objs = pkgs
-        .iter()
-        .map(|pkg| Package::new(pkg.as_str(), aur))
-        .collect();
 
-    // Return early if listing or creating backup
-    if op == List {
-        list_packages(groups);
-        return Ok(());
-    }
-    if let Backup(to) = op {
-        return backup_pkgdb(&to);
+    let no_defined_target = pkgs.is_empty();
+
+    let pkg_objs: Vec<Package> = if no_defined_target {
+        use_db_pkgs(&groups)?
+    } else {
+        pkgs.clone()
+            .into_iter()
+            .map(|pkg| Package::new(pkg.as_str(), aur))
+            .collect()
+    };
+
+    // Return early with "dry run" ops
+    match op {
+        Search => {
+            if no_defined_target {
+                return Err(AppError::ParamError("No target defined".to_string()));
+            }
+            return handle_search(&pkg_objs);
+        }
+        List => return list_packages(groups),
+        Backup(to) => return backup_pkgdb(&to),
+        _ => {}
     }
 
     let has_sudo_rights = Uid::effective().is_root();
 
     if !debug && !db.db_only {
         match (aur, has_sudo_rights, &op) {
-      (true, true, Sync) => return Err(
-        AppError::AclError(
-          "Running makepkg as root is not allowed as it can cause permanent, catastrophic damage to your system.".into()
-      )),
-      (false, false, _) => return Err(
-        AppError::AclError(
-          "You cannot perform this operation unless you are root.".into()
-      )),
-      _ => {}
-    }
+            (true, true, Sync) => return Err(
+                AppError::AclError(
+                    "Running makepkg as root is not allowed as it can cause permanent, catastrophic damage to your system.".into()
+                )
+            ),
+            (false, false, _) => return Err(
+                AppError::AclError(
+                    "You cannot perform this operation unless you are root.".into()
+                )
+            ),
+            _ => {}
+        }
     }
 
-    let (pkg_objs, is_target_from_db) = use_db_pkgs_if_empty(pkg_objs, &groups)?;
     let mut pkg_handler_res: Result<(), AppError> = Ok(());
 
     if !db.db_only {
@@ -85,7 +103,8 @@ fn main() -> Result<(), AppError> {
             op_string = "remove";
         }
 
-        if is_target_from_db {
+        // Use DB packages as target if none defined
+        if no_defined_target {
             println!("This will {op_string} many packages. Do you want to continue? [y/N]");
 
             let input: Option<char> = std::io::stdin()
@@ -101,7 +120,7 @@ fn main() -> Result<(), AppError> {
         pkg_handler_res = handler(&pkg_objs);
     }
 
-    if db.save && pkg_handler_res.is_ok() {
+    if target_db && pkg_handler_res.is_ok() {
         if let Err(e) = handle_save(pkg_objs, &op, groups) {
             error!("Error saving pkgdb.json: {e}");
             error!("Please resolve your pkgdb issue and rerun this command with --db-only: ");
