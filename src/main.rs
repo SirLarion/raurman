@@ -2,50 +2,60 @@ use std::{io::Read, rc::Rc};
 
 use clap::Parser;
 use error::AppError;
-use nix::unistd::Uid;
 use log::error;
+use nix::unistd::Uid;
 
-mod util;
+pub mod error;
 mod logger;
 pub mod types;
-pub mod error;
+mod util;
 
-use util::*;
-use types::*;
 use logger::LoggerFlags;
+use types::*;
+use util::*;
 
 //
-// Simple tool to combine pacman and AUR package management on Arch Linux 
-// systems. Optionally logs which packages have been downloaded into a JSON file 
+// Simple tool to combine pacman and AUR package management on Arch Linux
+// systems. Optionally logs which packages have been downloaded into a JSON file
 // for easy system reproducibility
 //
 fn main() -> Result<(), AppError> {
-  use OpType::*;
-  let Cli { pkgs, op, aur, db, verbose, debug } = Cli::parse();
-  let _ = logger::init(LoggerFlags { verbose, debug });
+    use OpType::*;
+    let Cli {
+        pkgs,
+        op,
+        aur,
+        db,
+        verbose,
+        debug,
+    } = Cli::parse();
+    let _ = logger::init(LoggerFlags { verbose, debug });
 
-  // Preprocess input
-  let op: OpType = op.into();
-  let groups: Vec<Rc<str>> = db.groups.into_iter().map(|g| g.into()).collect();
+    // Preprocess input
+    let op: OpType = op.into();
+    let groups: Vec<Rc<str>> = db.groups.into_iter().map(|g| g.into()).collect();
 
-  let mut pkgs = pkgs;
-  pkgs.sort();
-  pkgs.dedup();
-  let pkg_objs = pkgs.iter().map(|pkg| { Package::new(pkg.as_str(), aur)}).collect();
+    let mut pkgs = pkgs;
+    pkgs.sort();
+    pkgs.dedup();
+    let pkg_objs = pkgs
+        .iter()
+        .map(|pkg| Package::new(pkg.as_str(), aur))
+        .collect();
 
-  // Return early if listing or creating backup
-  if op == List {
-    list_packages(groups);
-    return Ok(());
-  }
-  if let Backup(to) = op {
-    return backup_pkgdb(&to);
-  }
+    // Return early if listing or creating backup
+    if op == List {
+        list_packages(groups);
+        return Ok(());
+    }
+    if let Backup(to) = op {
+        return backup_pkgdb(&to);
+    }
 
-  let has_sudo_rights = Uid::effective().is_root();
+    let has_sudo_rights = Uid::effective().is_root();
 
-  if !debug && !db.db_only {
-    match (aur, has_sudo_rights, &op) {
+    if !debug && !db.db_only {
+        match (aur, has_sudo_rights, &op) {
       (true, true, Sync) => return Err(
         AppError::AclError(
           "Running makepkg as root is not allowed as it can cause permanent, catastrophic damage to your system.".into()
@@ -56,57 +66,57 @@ fn main() -> Result<(), AppError> {
       )),
       _ => {}
     }
-  } 
-
-  let (pkg_objs, is_target_from_db) = use_db_pkgs_if_empty(pkg_objs, &groups)?;
-  let mut pkg_handler_res: Result<(), AppError> = Ok(());
-
-  if !db.db_only {
-    let handler: fn(&Vec<Package>) -> Result<(), AppError>;
-    let op_string: &str;
-
-    if op == Sync  {
-      handler = handle_sync;
-      op_string = "install";
-    } 
-    // pacman can be used to remove AUR packages as well
-    else {
-      handler = handle_remove;
-      op_string = "remove";
     }
 
-    if is_target_from_db {
-      println!("This will {op_string} many packages. Do you want to continue? [y/N]");
+    let (pkg_objs, is_target_from_db) = use_db_pkgs_if_empty(pkg_objs, &groups)?;
+    let mut pkg_handler_res: Result<(), AppError> = Ok(());
 
-      let input: Option<char> = std::io::stdin()
-        .bytes() 
-        .next()
-        .and_then(|result| result.ok())
-        .map(|byte| byte as char);
+    if !db.db_only {
+        let handler: fn(&Vec<Package>) -> Result<(), AppError>;
+        let op_string: &str;
 
-      if input != Some('y') && input != Some('Y') {
-        return Ok(());
-      }
+        if op == Sync {
+            handler = handle_sync;
+            op_string = "install";
+        }
+        // pacman can be used to remove AUR packages as well
+        else {
+            handler = handle_remove;
+            op_string = "remove";
+        }
+
+        if is_target_from_db {
+            println!("This will {op_string} many packages. Do you want to continue? [y/N]");
+
+            let input: Option<char> = std::io::stdin()
+                .bytes()
+                .next()
+                .and_then(|result| result.ok())
+                .map(|byte| byte as char);
+
+            if input != Some('y') && input != Some('Y') {
+                return Ok(());
+            }
+        }
+        pkg_handler_res = handler(&pkg_objs);
     }
-    pkg_handler_res = handler(&pkg_objs);
-  }
 
-  if db.save && pkg_handler_res.is_ok() {
-    if let Err(e) = handle_save(pkg_objs, &op, groups) {
-      error!("Error saving pkgdb.json: {e}");
-      error!("Please resolve your pkgdb issue and rerun this command with --db-only: ");
+    if db.save && pkg_handler_res.is_ok() {
+        if let Err(e) = handle_save(pkg_objs, &op, groups) {
+            error!("Error saving pkgdb.json: {e}");
+            error!("Please resolve your pkgdb issue and rerun this command with --db-only: ");
 
-      let op_flag = match op {
-        Sync => "-S",
-        Remove => "-R", 
-        _ => ""
-      };
-      
-      let pkg_str = pkgs.join(" ");
+            let op_flag = match op {
+                Sync => "-S",
+                Remove => "-R",
+                _ => "",
+            };
 
-      error!("raurman {op_flag} {pkg_str} --db-only");
-    };
-  }
-  
-  Ok(pkg_handler_res?)
+            let pkg_str = pkgs.join(" ");
+
+            error!("raurman {op_flag} {pkg_str} --db-only");
+        };
+    }
+
+    Ok(pkg_handler_res?)
 }
